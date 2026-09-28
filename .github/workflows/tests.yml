@@ -1,0 +1,87 @@
+name: Tests
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+
+defaults:
+  run:
+    working-directory: sdk-php-laravel
+
+jobs:
+  test:
+    name: PHP ${{ matrix.php }} / Laravel ${{ matrix.laravel }}
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Every Laravel 8 release carries unfixed security advisories, so a
+          # current Composer refuses to install it. The flag says "install it
+          # anyway": this job exists to prove the package still runs there, not
+          # to recommend the version.
+          - php: "7.4"
+            laravel: "8"
+            testbench: "^6.0"
+            phpunit: "^9.6"
+            composer_flags: "--no-security-blocking"
+          - php: "8.0"
+            laravel: "9"
+            testbench: "^7.0"
+            phpunit: "^9.6"
+          - php: "8.1"
+            laravel: "10"
+            testbench: "^8.0"
+            phpunit: "^10.1"
+          - php: "8.2"
+            laravel: "11"
+            testbench: "^9.0"
+            phpunit: "^10.5"
+          - php: "8.3"
+            laravel: "11"
+            testbench: "^9.0"
+            phpunit: "^10.5"
+          - php: "8.3"
+            laravel: "12"
+            testbench: "^10.0"
+            phpunit: "^11.5"
+          - php: "8.4"
+            laravel: "12"
+            testbench: "^10.0"
+            phpunit: "^11.5"
+
+    steps:
+      - name: Checkout the package
+        uses: actions/checkout@v4
+        with:
+          path: sdk-php-laravel
+
+      # The SDK is resolved through a path repository, so it has to sit next to
+      # the package under test.
+      - name: Checkout the SDK
+        uses: actions/checkout@v4
+        with:
+          repository: easypixels/sdk-php
+          path: sdk-php
+
+      - name: Setup PHP ${{ matrix.php }}
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: curl, json, mbstring
+          coverage: none
+
+      - name: Pin the Laravel and PHPUnit versions
+        run: |
+          composer require --dev --no-update --no-interaction \
+            "orchestra/testbench:${{ matrix.testbench }}" \
+            "phpunit/phpunit:${{ matrix.phpunit }}"
+
+      - name: Install dependencies
+        run: composer update --no-interaction --prefer-dist --no-progress ${{ matrix.composer_flags }}
+
+      - name: Run tests
+        run: vendor/bin/phpunit --testdox
